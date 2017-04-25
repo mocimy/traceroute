@@ -16,11 +16,18 @@ class Node:
         self.type = type
 
 
+class Link:
+    def __init__(self, path, rtt):
+        self.path = path
+        self.rtt = rtt
+
+
 @app.route('/data')
 def data():
     nodes = {}
     paths = {}
-    res = {'nodes': [], 'links': []}
+    circle = set()
+    res = {'nodes': [], 'links': [], 'circle': []}
     for i, post in enumerate(collection.find()):
         results = post['trace_result']
 
@@ -43,7 +50,10 @@ def data():
             ip = results[j]['ip']
             if ip != '*':
                 if ip in nodes:
-                    nodes[ip].path = nodes[ip].path + " p" + str(i)
+                    if nodes[ip].path[-(len(str(i))+1):] == ('p'+str(i)):
+                        circle.add(i)
+                    else:
+                        nodes[ip].path = nodes[ip].path + " p" + str(i)
                 else:
                     nodes[ip] = Node("p" + str(i), 2)
             else:
@@ -64,19 +74,23 @@ def data():
             target = list(nodes.keys()).index(ip)
             key = str(source) + '/' + str(target)
             if key in paths:
-                paths[key] = paths[key] + " p" + str(i)
+                paths[key].path = paths[key].path + " p" + str(i)
             else:
-                paths[key] = "p" + str(i)
+                paths[key] = Link("p" + str(i), results[j]['rtt'])
             source = target
 
     for i, (k, v) in enumerate(nodes.items()):
-        item = {'id': i, 'name': k, 'path': v.path, 'type':v.type}
+        # info = getgeo(k)
+        # print(info)
+        item = {'id': i, 'name': k, 'path': v.path, 'type': v.type}
         res['nodes'].append(item)
 
     for k, v in paths.items():
         source, target = k.split('/')
-        item = {'source': int(source), 'target': int(target), 'path': v, 'type': None, 'rtt': 1}
+        item = {'source': int(source), 'target': int(target), 'path': v.path, 'type': None, 'value': 1, 'rtt': v.rtt}
         res['links'].append(item)
+
+    res['circle'].extend(list(circle))
 
     return jsonify(res)
 
